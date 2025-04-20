@@ -1,0 +1,141 @@
+'use client';
+
+import { useState } from 'react';
+
+interface BoxStatus {
+  isOpened: boolean;
+  isClaimed: boolean;
+  prizeType: number;
+}
+
+interface LotteryBoxProps {
+  boxId: number;
+  isOpened: boolean;
+  isClaimed: boolean;
+  prizeType: number;
+  onOpen: () => void;
+  onClaim: () => void;
+  isOpenLoading?: boolean;
+  isClaimLoading?: boolean;
+  isConnected: boolean;
+  onConnectWallet: () => void;
+}
+
+const getPrizeText = (prizeType: number) => {
+  switch (prizeType) {
+    case 1:
+      return '0.002 ETH';
+    case 2:
+      return '0.1 ETH';
+    case 3:
+      return '1 ETH';
+    case 4:
+      return 'NFT';
+    default:
+      return '未中奖';
+  }
+};
+
+const getPrizeColor = (prizeType: number) => {
+  switch (prizeType) {
+    case 1:
+      return 'text-blue-500';
+    case 2:
+      return 'text-purple-500';
+    case 3:
+      return 'text-yellow-500';
+    case 4:
+      return 'text-pink-500';
+    default:
+      return 'text-gray-500';
+  }
+};
+
+export default function LotteryBox({
+  boxId,
+  isOpened,
+  isClaimed,
+  prizeType,
+  onOpen,
+  onClaim,
+  isOpenLoading,
+  isClaimLoading,
+  isConnected,
+  onConnectWallet,
+}: LotteryBoxProps) {
+  const [isHovered, setIsHovered] = useState(false);
+
+  const handleClick = () => {
+    if (!isConnected) {
+      onConnectWallet();
+      return;
+    }
+    
+    if (!isOpened) {
+      onOpen();
+    } else if (!isClaimed && prizeType !== 0) {
+      onClaim();
+    }
+  };
+
+  return (
+    <div
+      className={`
+        relative w-32 h-32 rounded-lg shadow-md cursor-pointer
+        transition-all duration-300
+        ${isOpened ? 'bg-gray-100' : 'bg-white hover:bg-gray-50'}
+        ${isClaimed ? 'opacity-50' : 'opacity-100'}
+        ${isHovered && !isOpened ? 'transform scale-105' : ''}
+      `}
+      onClick={handleClick}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      <div className="absolute inset-0 flex flex-col items-center justify-center p-2">
+        {isOpenLoading ? (
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900" />
+        ) : isClaimLoading ? (
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-500" />
+        ) : isOpened ? (
+          prizeType === 0 ? (
+            <span className="text-gray-500">未中奖</span>
+          ) : !isClaimed ? (
+            <div className="flex flex-col items-center space-y-2">
+              <span className={`text-sm font-medium ${getPrizeColor(prizeType)}`}>
+                恭喜中奖
+              </span>
+              <span className={`text-xs ${getPrizeColor(prizeType)}`}>
+                {getPrizeText(prizeType)}
+              </span>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (!isConnected) {
+                    onConnectWallet();
+                    return;
+                  }
+                  onClaim();
+                }}
+                className="px-3 py-1 bg-green-500 text-white text-sm rounded-full hover:bg-green-600 transition-colors duration-200 shadow-sm"
+              >
+                领取奖励
+              </button>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center space-y-1">
+              <span className={`text-sm ${getPrizeColor(prizeType)}`}>
+                {getPrizeText(prizeType)}
+              </span>
+              <span className="text-green-500 text-xs">已领取</span>
+            </div>
+          )
+        ) : (
+          <div className="flex flex-col items-center space-y-1">
+            <span className="text-lg font-bold text-gray-700">#{boxId}</span>
+            <span className="text-xs text-gray-500">点击开启</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+} 

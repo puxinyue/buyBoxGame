@@ -1,103 +1,236 @@
-import Image from "next/image";
+'use client';
+
+import { useState, useEffect } from 'react';
+import { useAccount } from 'wagmi';
+import { useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
+import { readContract } from '@wagmi/core';
+import { ConnectButton } from '@rainbow-me/rainbowkit';
+import { boxLotteryConfig } from './config/contracts';
+import LotteryBox from './components/LotteryBox';
+import { parseEther } from 'viem';
+import { config } from './config/wagmi';
+
+interface BoxStatus {
+  isOpened: boolean;
+  isClaimed: boolean;
+  prizeType: number;
+}
+
+type BoxData = readonly [boolean, number, boolean];
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const { address, isConnected } = useAccount();
+  const [selectedBoxId, setSelectedBoxId] = useState<number>(0);
+  const [showConnectTip, setShowConnectTip] = useState(false);
+  const [boxes, setBoxes] = useState<BoxStatus[]>(Array(100).fill(null).map(() => ({
+    isOpened: false,
+    isClaimed: false,
+    prizeType: 0
+  })));
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+  // 读取所有盒子状态
+  const fetchAllBoxStatus = async () => {
+    if (!isConnected) return;
+    
+    try {
+      const newBoxes = [...boxes];
+      for (let i = 0; i < 100; i++) {
+        try {
+          // 获取盒子完整状态
+          const result = await readContract(config, {
+            address: boxLotteryConfig.address,
+            abi: boxLotteryConfig.abi,
+            functionName: 'boxes',
+            args: [BigInt(i)],
+          }) as BoxData;
+
+          newBoxes[i] = {
+            isOpened: result[0],
+            prizeType: result[1],
+            isClaimed: result[2]
+          };
+        } catch (boxError) {
+          console.error(`获取盒子 ${i} 状态失败:`, boxError);
+          // 如果获取单个盒子状态失败，继续处理下一个盒子
+          continue;
+        }
+      }
+      setBoxes(newBoxes);
+    } catch (error) {
+      console.error('获取盒子状态失败:', error);
+    }
+  };
+
+  // 连接钱包后和组件加载时获取状态
+  useEffect(() => {
+    if (isConnected) {
+      fetchAllBoxStatus();
+    }
+  }, [isConnected]);
+
+  // 开盒子
+  const { writeContract: openBox, data: openBoxData } = useWriteContract();
+
+  // 等待开盒子交易完成
+  const { isLoading: isOpenBoxLoading, isSuccess: isOpenBoxSuccess } = 
+    useWaitForTransactionReceipt({
+      hash: openBoxData,
+    });
+
+  // 监听开盒子交易完成
+  useEffect(() => {
+    if (isOpenBoxSuccess) {
+      // 更新单个盒子状态
+      updateSingleBoxStatus(selectedBoxId);
+    }
+  }, [isOpenBoxSuccess]);
+
+  // 领取奖励
+  const { writeContract: claimPrize, data: claimPrizeData } = useWriteContract();
+
+  // 等待领奖交易完成
+  const { isLoading: isClaimLoading, isSuccess: isClaimSuccess } = 
+    useWaitForTransactionReceipt({
+      hash: claimPrizeData,
+    });
+
+  // 监听领奖交易完成
+  useEffect(() => {
+    if (isClaimSuccess) {
+      // 更新单个盒子状态
+      updateSingleBoxStatus(selectedBoxId);
+    }
+  }, [isClaimSuccess]);
+
+  // 更新单个盒子状态
+  const updateSingleBoxStatus = async (boxId: number) => {
+    if (!isConnected) return;
+
+    try {
+      // 获取盒子完整状态
+      const result = await readContract(config, {
+        address: boxLotteryConfig.address,
+        abi: boxLotteryConfig.abi,
+        functionName: 'boxes',
+        args: [BigInt(boxId)],
+      }) as BoxData;
+
+      const newBoxes = [...boxes];
+      newBoxes[boxId] = {
+        isOpened: result[0],
+        prizeType: result[1],
+        isClaimed: result[2]
+      };
+      setBoxes(newBoxes);
+
+      // 显示开盒结果
+      if (isOpenBoxSuccess && result[0]) {
+        let message = '';
+        switch (result[1]) {
+          case 0:
+            message = '很遗憾，未中奖';
+            break;
+          case 1:
+            message = '恭喜获得 0.002 ETH!';
+            break;
+          case 2:
+            message = '恭喜获得 0.1 ETH!';
+            break;
+          case 3:
+            message = '恭喜获得 1 ETH!';
+            break;
+          case 4:
+            message = '恭喜获得 NFT!';
+            break;
+        }
+        alert(message);
+      }
+    } catch (error) {
+      console.error('更新盒子状态失败:', error);
+    }
+  };
+
+  const handleOpenBox = async (boxId: number) => {
+    if (!isConnected) return;
+    try {
+      setSelectedBoxId(boxId);
+      await openBox({
+        address: boxLotteryConfig.address,
+        abi: boxLotteryConfig.abi,
+        functionName: 'openBox',
+        args: [BigInt(boxId)],
+        value: parseEther('0.015'),
+      });
+    } catch (error) {
+      console.error('开盒子失败:', error);
+      alert('开盒子失败，请检查钱包余额是否足够或稍后重试');
+    }
+  };
+
+  const handleClaimPrize = async (boxId: number) => {
+    if (!isConnected) return;
+    try {
+      setSelectedBoxId(boxId);
+      await claimPrize({
+        address: boxLotteryConfig.address,
+        abi: boxLotteryConfig.abi,
+        functionName: 'claimPrize',
+        args: [BigInt(boxId)],
+        gas: BigInt(300000),
+      });
+    } catch (error) {
+      console.error('领取奖励失败:', error);
+      alert('领取奖励失败，请稍后重试');
+    }
+  };
+
+  const handleConnectWallet = () => {
+    setShowConnectTip(true);
+    setTimeout(() => setShowConnectTip(false), 3000);
+  };
+
+  return (
+    <main className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100">
+      <div className="container mx-auto px-4 py-8">
+        <div className="flex justify-between items-center mb-8">
+          <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-500 to-pink-500">
+            幸运盒子抽奖
+          </h1>
+          <ConnectButton />
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+
+        <div className="text-center mb-8">
+          <p className="text-lg font-medium text-gray-700">每个盒子 0.015 ETH</p>
+          {isConnected && (
+            <p className="text-sm text-gray-500 mt-2">当前地址: {address}</p>
+          )}
+        </div>
+        
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-10 gap-4">
+          {boxes.map((status, index) => (
+            <LotteryBox
+              key={index}
+              boxId={index}
+              isOpened={status.isOpened}
+              isClaimed={status.isClaimed}
+              prizeType={status.prizeType}
+              onOpen={() => handleOpenBox(index)}
+              onClaim={() => handleClaimPrize(index)}
+              isOpenLoading={isOpenBoxLoading && selectedBoxId === index}
+              isClaimLoading={isClaimLoading && selectedBoxId === index}
+              isConnected={isConnected}
+              onConnectWallet={handleConnectWallet}
+            />
+          ))}
+        </div>
+
+        {/* 全局连接钱包提示 */}
+        {showConnectTip && !isConnected && (
+          <div className="fixed bottom-8 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-75 text-white px-6 py-3 rounded-full shadow-lg transition-all duration-300 ease-in-out">
+            Please connect your wallet first
+          </div>
+        )}
+      </div>
+    </main>
   );
 }
