@@ -81,7 +81,7 @@ export default function LotteryBox({
   return (
     <div
       className={`
-        relative w-32 h-32 rounded-lg shadow-md cursor-pointer
+        relative w-full aspect-square max-w-[120px] mx-auto rounded-lg shadow-md cursor-pointer
         transition-all duration-300
         ${isOpened ? 'bg-gray-100' : 'bg-white hover:bg-gray-50'}
         ${isClaimed ? 'opacity-50' : 'opacity-100'}
@@ -93,18 +93,18 @@ export default function LotteryBox({
     >
       <div className="absolute inset-0 flex flex-col items-center justify-center p-2">
         {isOpenLoading ? (
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900" />
+          <div className="animate-spin rounded-full h-6 w-6 sm:h-8 sm:w-8 border-b-2 border-gray-900" />
         ) : isClaimLoading ? (
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-500" />
+          <div className="animate-spin rounded-full h-6 w-6 sm:h-8 sm:w-8 border-b-2 border-green-500" />
         ) : isOpened ? (
           prizeType === 0 ? (
-            <span className="text-gray-500">未中奖</span>
+            <span className="text-sm sm:text-base text-gray-500">未中奖</span>
           ) : !isClaimed ? (
-            <div className="flex flex-col items-center space-y-2">
-              <span className={`text-sm font-medium ${getPrizeColor(prizeType)}`}>
+            <div className="flex flex-col items-center space-y-1 sm:space-y-2">
+              <span className={`text-xs sm:text-sm font-medium ${getPrizeColor(prizeType)}`}>
                 恭喜中奖
               </span>
-              <span className={`text-xs ${getPrizeColor(prizeType)}`}>
+              <span className={`text-[10px] sm:text-xs ${getPrizeColor(prizeType)}`}>
                 {getPrizeText(prizeType)}
               </span>
               <button
@@ -116,23 +116,23 @@ export default function LotteryBox({
                   }
                   onClaim();
                 }}
-                className="px-3 py-1 bg-green-500 text-white text-sm rounded-full hover:bg-green-600 transition-colors duration-200 shadow-sm"
+                className="px-2 sm:px-3 py-0.5 sm:py-1 bg-green-500 text-white text-[10px] sm:text-sm rounded-full hover:bg-green-600 transition-colors duration-200 shadow-sm"
               >
                 领取奖励
               </button>
             </div>
           ) : (
-            <div className="flex flex-col items-center space-y-1">
-              <span className={`text-sm ${getPrizeColor(prizeType)}`}>
+            <div className="flex flex-col items-center space-y-0.5 sm:space-y-1">
+              <span className={`text-xs sm:text-sm ${getPrizeColor(prizeType)}`}>
                 {getPrizeText(prizeType)}
               </span>
-              <span className="text-green-500 text-xs">已领取</span>
+              <span className="text-[10px] sm:text-xs text-green-500">已领取</span>
             </div>
           )
         ) : (
-          <div className="flex flex-col items-center space-y-1">
-            <span className="text-lg font-bold text-gray-700">#{boxId}</span>
-            <span className="text-xs text-gray-500">点击开启</span>
+          <div className="flex flex-col items-center space-y-0.5 sm:space-y-1">
+            <span className="text-base sm:text-lg font-bold text-gray-700">#{boxId}</span>
+            <span className="text-[10px] sm:text-xs text-gray-500">点击开启</span>
           </div>
         )}
       </div>

@@ -9,8 +9,10 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@chainlink/env-enc": "^1.0.5",
     "@rainbow-me/rainbowkit": "^2.2.4",
     "@tanstack/react-query": "^5.74.4",
+    "dotenv": "^16.5.0",
     "framer-motion": "^12.7.4",
     "next": "15.3.1",
     "react": "^19.0.0",
